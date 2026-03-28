@@ -1,16 +1,19 @@
 package com.zeroboat.timerkit.running
 
+import android.Manifest
 import android.app.Application
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.datastore.preferences.core.edit
-import com.zeroboat.timerkit.common.appDataStore
 import com.zeroboat.timerkit.common.IntervalTimerHelper
+import com.zeroboat.timerkit.common.LocationTracker
 import com.zeroboat.timerkit.common.PreferencesKeys
 import com.zeroboat.timerkit.common.TimerService
 import com.zeroboat.timerkit.common.VibrationHelper
+import com.zeroboat.timerkit.common.appDataStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +32,12 @@ data class RunningUiState(
     val runSeconds: Int = 60,
     val restSeconds: Int = 90,
     val isRunning: Boolean = false,
-    val isFinished: Boolean = false
+    val isFinished: Boolean = false,
+    // 위치
+    val isLocationGranted: Boolean = false,
+    val distanceMeters: Float = 0f,
+    val runElapsedMillis: Long = 0L,
+    val routePoints: List<com.zeroboat.timerkit.common.GpsPoint> = emptyList()
 )
 
 class RunningViewModel(application: Application) : AndroidViewModel(application) {
@@ -38,17 +46,45 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
     val uiState: StateFlow<RunningUiState> = _uiState.asStateFlow()
 
     private val timer = IntervalTimerHelper(viewModelScope)
+    private val locationTracker = LocationTracker(application)
 
     init {
+        // 저장된 설정 복원
         viewModelScope.launch {
             val prefs = getApplication<Application>().appDataStore.data.first()
-            _uiState.value = RunningUiState(
+            _uiState.update { it.copy(
                 totalIntervals = prefs[PreferencesKeys.RUNNING_TOTAL_INTERVALS] ?: 5,
                 warmupSeconds  = prefs[PreferencesKeys.RUNNING_WARMUP_SECONDS]  ?: 300,
                 runSeconds     = prefs[PreferencesKeys.RUNNING_RUN_SECONDS]     ?: 60,
                 restSeconds    = prefs[PreferencesKeys.RUNNING_REST_SECONDS]    ?: 90
-            )
+            )}
         }
+        // 위치 권한 초기 확인
+        checkLocationPermission()
+        // 거리 + 경로 업데이트 수신
+        viewModelScope.launch {
+            locationTracker.distanceMeters.collect { meters ->
+                _uiState.update { it.copy(distanceMeters = meters) }
+            }
+        }
+        viewModelScope.launch {
+            locationTracker.routePoints.collect { points ->
+                _uiState.update { it.copy(routePoints = points) }
+            }
+        }
+    }
+
+    fun checkLocationPermission() {
+        val granted = ContextCompat.checkSelfPermission(
+            getApplication(),
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        _uiState.update { it.copy(isLocationGranted = granted) }
+    }
+
+    fun onLocationPermissionGranted() {
+        _uiState.update { it.copy(isLocationGranted = true) }
+        if (_uiState.value.isRunning) locationTracker.start()
     }
 
     fun start() {
@@ -62,36 +98,40 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
             )}
         }
         _uiState.update { it.copy(isRunning = true) }
+        if (_uiState.value.isLocationGranted) locationTracker.start()
         startService("러닝 워밍업 중...")
         timer.start { tick() }
     }
 
     fun pause() {
         timer.cancel()
+        locationTracker.stop()
         _uiState.update { it.copy(isRunning = false) }
         stopService()
     }
 
     fun reset() {
         timer.cancel()
+        locationTracker.reset()
         val s = _uiState.value
         _uiState.value = RunningUiState(
-            totalIntervals = s.totalIntervals,
-            warmupSeconds = s.warmupSeconds,
-            runSeconds = s.runSeconds,
-            restSeconds = s.restSeconds
+            totalIntervals    = s.totalIntervals,
+            warmupSeconds     = s.warmupSeconds,
+            runSeconds        = s.runSeconds,
+            restSeconds       = s.restSeconds,
+            isLocationGranted = s.isLocationGranted
         )
         stopService()
     }
 
     fun updateSettings(totalIntervals: Int, warmupSeconds: Int, runSeconds: Int, restSeconds: Int) {
         if (_uiState.value.isRunning) return
-        _uiState.value = RunningUiState(
+        _uiState.update { it.copy(
             totalIntervals = totalIntervals,
-            warmupSeconds = warmupSeconds,
-            runSeconds = runSeconds,
-            restSeconds = restSeconds
-        )
+            warmupSeconds  = warmupSeconds,
+            runSeconds     = runSeconds,
+            restSeconds    = restSeconds
+        )}
         viewModelScope.launch {
             getApplication<Application>().appDataStore.edit { prefs ->
                 prefs[PreferencesKeys.RUNNING_TOTAL_INTERVALS] = totalIntervals
@@ -106,7 +146,12 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         val s = _uiState.value
         val newRemaining = s.remainingMillis - 100L
         if (newRemaining > 0) {
-            _uiState.update { it.copy(remainingMillis = newRemaining) }
+            _uiState.update { it.copy(
+                remainingMillis = newRemaining,
+                // RUN 페이즈에서만 경과 시간 누적
+                runElapsedMillis = if (s.phase == RunningPhase.RUN) s.runElapsedMillis + 100L
+                                   else s.runElapsedMillis
+            )}
             return
         }
         when (s.phase) {
@@ -123,6 +168,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                 if (s.currentInterval >= s.totalIntervals) {
                     VibrationHelper.doneBuzz(getApplication())
                     timer.cancel()
+                    locationTracker.stop()
                     _uiState.update { it.copy(isRunning = false, isFinished = true, remainingMillis = 0L) }
                     stopService()
                 } else {
@@ -149,11 +195,10 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
 
     private fun startService(text: String) {
         val ctx = getApplication<Application>()
-        val intent = Intent(ctx, TimerService::class.java).apply {
+        ContextCompat.startForegroundService(ctx, Intent(ctx, TimerService::class.java).apply {
             action = TimerService.ACTION_START
             putExtra(TimerService.EXTRA_TEXT, text)
-        }
-        ContextCompat.startForegroundService(ctx, intent)
+        })
     }
 
     private fun updateService(text: String) {

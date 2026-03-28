@@ -1,5 +1,11 @@
 package com.zeroboat.timerkit.running
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,15 +14,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -27,7 +37,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.width
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
@@ -36,6 +45,19 @@ fun RunningScreen(
     vm: RunningViewModel = viewModel()
 ) {
     val state by vm.uiState.collectAsState()
+    var showMap by rememberSaveable { mutableStateOf(false) }
+
+    if (showMap) {
+        RunningMapScreen(state = state, onBack = { showMap = false })
+        return
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) vm.onLocationPermissionGranted() }
+
+    // 화면 진입 시마다 권한 상태 갱신
+    LaunchedEffect(Unit) { vm.checkLocationPermission() }
 
     Column(
         modifier = modifier
@@ -99,22 +121,45 @@ fun RunningScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // 위치 섹션
+        if (state.isLocationGranted) {
+            LocationStatsRow(
+                distanceMeters = state.distanceMeters,
+                runElapsedMillis = state.runElapsedMillis
+            )
+        } else {
+            LocationPermissionBanner(
+                onRequest = {
+                    permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         // 컨트롤 버튼
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             OutlinedButton(
                 onClick = vm::reset,
                 modifier = Modifier.weight(1f)
-            ) {
-                Text("Reset")
-            }
+            ) { Text("Reset") }
             Button(
                 onClick = { if (state.isRunning) vm.pause() else vm.start() },
                 enabled = !state.isFinished,
                 modifier = Modifier.weight(1f)
+            ) { Text(if (state.isRunning) "Pause" else "Start") }
+        }
+
+        // 완료 시 지도 결과 보기 버튼
+        if (state.isFinished) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = { showMap = true },
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (state.isRunning) "Pause" else "Start")
+                Text("지도에서 결과 보기")
             }
         }
 
@@ -130,82 +175,46 @@ fun RunningScreen(
                 modifier = Modifier.align(Alignment.Start)
             )
             Spacer(modifier = Modifier.height(12.dp))
-            SettingRow(
-                label = "인터벌 수",
-                value = state.totalIntervals,
-                unit = "회",
-                min = 1,
+            SettingRow("인터벌 수", state.totalIntervals, "회", 1,
                 onDecrement = {
-                    vm.updateSettings(
-                        (state.totalIntervals - 1).coerceAtLeast(1),
-                        state.warmupSeconds, state.runSeconds, state.restSeconds
-                    )
+                    vm.updateSettings((state.totalIntervals - 1).coerceAtLeast(1),
+                        state.warmupSeconds, state.runSeconds, state.restSeconds)
                 },
                 onIncrement = {
-                    vm.updateSettings(
-                        state.totalIntervals + 1,
-                        state.warmupSeconds, state.runSeconds, state.restSeconds
-                    )
+                    vm.updateSettings(state.totalIntervals + 1,
+                        state.warmupSeconds, state.runSeconds, state.restSeconds)
                 }
             )
-            SettingRow(
-                label = "워밍업",
-                value = state.warmupSeconds / 60,
-                unit = "분",
-                min = 0,
+            SettingRow("워밍업", state.warmupSeconds / 60, "분", 0,
                 onDecrement = {
-                    vm.updateSettings(
-                        state.totalIntervals,
+                    vm.updateSettings(state.totalIntervals,
                         ((state.warmupSeconds / 60) - 1).coerceAtLeast(0) * 60,
-                        state.runSeconds, state.restSeconds
-                    )
+                        state.runSeconds, state.restSeconds)
                 },
                 onIncrement = {
-                    vm.updateSettings(
-                        state.totalIntervals,
+                    vm.updateSettings(state.totalIntervals,
                         ((state.warmupSeconds / 60) + 1) * 60,
-                        state.runSeconds, state.restSeconds
-                    )
+                        state.runSeconds, state.restSeconds)
                 }
             )
-            SettingRow(
-                label = "러닝 시간",
-                value = state.runSeconds,
-                unit = "초",
-                min = 10,
+            SettingRow("러닝 시간", state.runSeconds, "초", 10,
                 onDecrement = {
-                    vm.updateSettings(
-                        state.totalIntervals, state.warmupSeconds,
-                        (state.runSeconds - 10).coerceAtLeast(10),
-                        state.restSeconds
-                    )
+                    vm.updateSettings(state.totalIntervals, state.warmupSeconds,
+                        (state.runSeconds - 10).coerceAtLeast(10), state.restSeconds)
                 },
                 onIncrement = {
-                    vm.updateSettings(
-                        state.totalIntervals, state.warmupSeconds,
-                        state.runSeconds + 10,
-                        state.restSeconds
-                    )
+                    vm.updateSettings(state.totalIntervals, state.warmupSeconds,
+                        state.runSeconds + 10, state.restSeconds)
                 }
             )
-            SettingRow(
-                label = "휴식 시간",
-                value = state.restSeconds,
-                unit = "초",
-                min = 10,
+            SettingRow("휴식 시간", state.restSeconds, "초", 10,
                 onDecrement = {
-                    vm.updateSettings(
-                        state.totalIntervals, state.warmupSeconds,
-                        state.runSeconds,
-                        (state.restSeconds - 10).coerceAtLeast(10)
-                    )
+                    vm.updateSettings(state.totalIntervals, state.warmupSeconds,
+                        state.runSeconds, (state.restSeconds - 10).coerceAtLeast(10))
                 },
                 onIncrement = {
-                    vm.updateSettings(
-                        state.totalIntervals, state.warmupSeconds,
-                        state.runSeconds,
-                        state.restSeconds + 10
-                    )
+                    vm.updateSettings(state.totalIntervals, state.warmupSeconds,
+                        state.runSeconds, state.restSeconds + 10)
                 }
             )
         }
@@ -215,18 +224,90 @@ fun RunningScreen(
 }
 
 @Composable
+private fun LocationStatsRow(distanceMeters: Float, runElapsedMillis: Long) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        StatBox(
+            label = "거리",
+            value = formatDistance(distanceMeters)
+        )
+        StatBox(
+            label = "페이스",
+            value = formatPace(distanceMeters, runElapsedMillis)
+        )
+    }
+}
+
+@Composable
+private fun StatBox(label: String, value: String) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = value,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun LocationPermissionBanner(onRequest: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "거리 측정",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "위치 권한을 허용하면 달린 거리를 기록합니다",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            OutlinedButton(onClick = onRequest) { Text("허용") }
+        }
+    }
+}
+
+@Composable
 private fun SettingRow(
-    label: String,
-    value: Int,
-    unit: String,
-    min: Int,
-    onDecrement: () -> Unit,
-    onIncrement: () -> Unit
+    label: String, value: Int, unit: String, min: Int,
+    onDecrement: () -> Unit, onIncrement: () -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -250,7 +331,18 @@ private fun SettingRow(
 
 private fun formatCountdown(millis: Long): String {
     val totalSeconds = (millis + 999) / 1_000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return "%02d:%02d".format(minutes, seconds)
+    return "%02d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+}
+
+private fun formatDistance(meters: Float): String {
+    return if (meters < 1000) "${"%.0f".format(meters)} m"
+    else "${"%.2f".format(meters / 1000)} km"
+}
+
+private fun formatPace(meters: Float, runMs: Long): String {
+    if (meters < 10f || runMs == 0L) return "--'--\""
+    val secPerKm = (runMs / 1000f) / (meters / 1000f)
+    val min = (secPerKm / 60).toInt()
+    val sec = (secPerKm % 60).toInt()
+    return "$min'%02d\"".format(sec)
 }
