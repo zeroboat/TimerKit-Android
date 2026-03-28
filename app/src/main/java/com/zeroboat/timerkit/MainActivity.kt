@@ -4,19 +4,29 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.DirectionsRun
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.OutdoorGrill
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
@@ -25,10 +35,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewScreenSizes
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.zeroboat.timerkit.cooking.CookingScreen
+import com.zeroboat.timerkit.running.RunningScreen
+import com.zeroboat.timerkit.stopwatch.StopwatchScreen
+import com.zeroboat.timerkit.tabata.TabataScreen
 import com.zeroboat.timerkit.ui.theme.TimerKitAndroidTheme
 
 class MainActivity : ComponentActivity() {
@@ -43,7 +58,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@PreviewScreenSizes
 @Composable
 fun TimerKitAndroidApp() {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
@@ -52,12 +66,7 @@ fun TimerKitAndroidApp() {
         navigationSuiteItems = {
             AppDestinations.entries.forEach {
                 item(
-                    icon = {
-                        Icon(
-                            it.icon,
-                            contentDescription = it.label
-                        )
-                    },
+                    icon = { Icon(it.icon, contentDescription = it.label) },
                     label = { Text(it.label) },
                     selected = it == currentDestination,
                     onClick = { currentDestination = it }
@@ -67,9 +76,12 @@ fun TimerKitAndroidApp() {
     ) {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             when (currentDestination) {
-                AppDestinations.StopWatch -> StopWatchScreen(modifier = Modifier.padding(innerPadding))
+                AppDestinations.StopWatch -> StopwatchScreen(modifier = Modifier.padding(innerPadding))
                 AppDestinations.Tabata -> TabataScreen(modifier = Modifier.padding(innerPadding))
-                AppDestinations.HOME -> HomeScreen(modifier = Modifier.padding(innerPadding))
+                AppDestinations.HOME -> HomeScreen(
+                    modifier = Modifier.padding(innerPadding),
+                    onNavigate = { currentDestination = it }
+                )
                 AppDestinations.Cooking -> CookingScreen(modifier = Modifier.padding(innerPadding))
                 AppDestinations.Running -> RunningScreen(modifier = Modifier.padding(innerPadding))
             }
@@ -80,7 +92,6 @@ fun TimerKitAndroidApp() {
 enum class AppDestinations(
     val label: String,
     val icon: ImageVector,
-
 ) {
     StopWatch("StopWatch", Icons.Filled.Timer),
     Tabata("Tabata", Icons.Filled.FitnessCenter),
@@ -89,58 +100,89 @@ enum class AppDestinations(
     Running("Running", Icons.AutoMirrored.Filled.DirectionsRun),
 }
 
+private data class TimerShortcut(
+    val destination: AppDestinations,
+    val icon: ImageVector,
+    val title: String,
+    val description: String,
+)
+
+private val shortcuts = listOf(
+    TimerShortcut(AppDestinations.StopWatch, Icons.Filled.Timer, "스톱워치", "시간 측정 + 랩 기록"),
+    TimerShortcut(AppDestinations.Tabata, Icons.Filled.FitnessCenter, "Tabata", "인터벌 운동 타이머"),
+    TimerShortcut(AppDestinations.Running, Icons.AutoMirrored.Filled.DirectionsRun, "러닝", "워밍업 + 인터벌 러닝"),
+    TimerShortcut(AppDestinations.Cooking, Icons.Filled.OutdoorGrill, "쿠킹", "다중 타이머 동시 실행"),
+)
+
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
+fun HomeScreen(
+    modifier: Modifier = Modifier,
+    onNavigate: (AppDestinations) -> Unit = {}
+) {
+    Column(
         modifier = modifier
-    )
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(32.dp))
+        Text(
+            text = "TimerKit",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = "원하는 타이머를 선택하세요",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(shortcuts) { shortcut ->
+                ShortcutCard(shortcut = shortcut, onClick = { onNavigate(shortcut.destination) })
+            }
+        }
+    }
 }
 
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
-    Text(
-        text = "Welcome to TimerKit Android!\n\nChoose a timer from the navigation.",
-        modifier = modifier
-    )
-}
-
-@Composable
-fun StopWatchScreen(modifier: Modifier = Modifier) {
-    Text(
-        text = "StopWatch Timer\n\nFeature coming soon...",
-        modifier = modifier
-    )
-}
-
-@Composable
-fun TabataScreen(modifier: Modifier = Modifier) {
-    Text(
-        text = "Tabata Timer\n\nFeature coming soon...",
-        modifier = modifier
-    )
-}
-
-@Composable
-fun CookingScreen(modifier: Modifier = Modifier) {
-    Text(
-        text = "Cooking Timer\n\nFeature coming soon...",
-        modifier = modifier
-    )
-}
-
-@Composable
-fun RunningScreen(modifier: Modifier = Modifier) {
-    Text(
-        text = "Running Timer\n\nFeature coming soon...",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    TimerKitAndroidTheme {
-        Greeting("Android")
+private fun ShortcutCard(shortcut: TimerShortcut, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = shortcut.icon,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Text(
+                text = shortcut.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Text(
+                text = shortcut.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f)
+            )
+        }
     }
 }
