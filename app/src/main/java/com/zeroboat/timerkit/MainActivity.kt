@@ -164,12 +164,9 @@ fun HomeScreen(
     }
 }
 
-private const val BANNER_TEST_ID = "ca-app-pub-3940256099942544/6300978111"
-private const val BANNER_PROD_ID  = "YOUR_BANNER_AD_UNIT_ID"
-
 @Composable
 private fun BannerAd(modifier: Modifier = Modifier) {
-    val adUnitId = if (BuildConfig.DEBUG) BANNER_TEST_ID else BANNER_PROD_ID
+    val adUnitId = BuildConfig.BANNER_AD_UNIT_ID
     AndroidView(
         modifier = modifier,
         factory = { context ->

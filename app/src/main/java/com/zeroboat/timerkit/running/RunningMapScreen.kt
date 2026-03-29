@@ -53,8 +53,6 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.zeroboat.timerkit.BuildConfig
 import kotlinx.coroutines.delay
 
-private const val INTERSTITIAL_TEST_ID = "ca-app-pub-3940256099942544/1033173712"
-private const val INTERSTITIAL_PROD_ID  = "YOUR_INTERSTITIAL_AD_UNIT_ID"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,7 +66,7 @@ fun RunningMapScreen(
 
     // 전면 광고 로드 → 표시 → 완료 시 콘텐츠 노출
     LaunchedEffect(Unit) {
-        val adUnitId = if (BuildConfig.DEBUG) INTERSTITIAL_TEST_ID else INTERSTITIAL_PROD_ID
+        val adUnitId = BuildConfig.INTERSTITIAL_AD_UNIT_ID
         InterstitialAd.load(
             context,
             adUnitId,

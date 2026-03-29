@@ -186,3 +186,9 @@ fabric.properties
 
 # Local development plan (not for version control)
 PLAN.md
+
+# Release output
+app/release/
+
+# Test screenshots
+screen.png
