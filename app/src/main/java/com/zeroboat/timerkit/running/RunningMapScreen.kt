@@ -50,6 +50,12 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.HorizontalDivider
 import com.zeroboat.timerkit.BuildConfig
 import kotlinx.coroutines.delay
 
@@ -177,7 +183,42 @@ fun RunningMapScreen(
                 ) {
                     ResultStat(label = "거리", value = formatDistance(state.distanceMeters))
                     ResultStat(label = "페이스", value = formatPace(state.distanceMeters, state.runElapsedMillis))
-                    ResultStat(label = "인터벌", value = "${state.totalIntervals}회")
+                    if (state.mode == RunningMode.INTERVAL) {
+                        ResultStat(label = "인터벌", value = "${state.totalIntervals}회")
+                    } else {
+                        ResultStat(label = "시간", value = formatElapsed(state.totalElapsedMillis))
+                    }
+                }
+
+                // km 페이스 기록 (기본 모드)
+                if (state.mode == RunningMode.BASIC && state.kmPaceRecords.isNotEmpty()) {
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(
+                            text = "km 기록",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        state.kmPaceRecords.forEach { record ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "${record.km} km",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = formatPaceSeconds(record.paceSeconds),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -210,4 +251,9 @@ private fun formatPace(meters: Float, runMs: Long): String {
     if (meters < 10f || runMs == 0L) return "--'--\""
     val secPerKm = (runMs / 1000f) / (meters / 1000f)
     return "${(secPerKm / 60).toInt()}'%02d\"".format((secPerKm % 60).toInt())
+}
+
+private fun formatElapsed(millis: Long): String {
+    val totalSeconds = millis / 1000
+    return "%02d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 }
