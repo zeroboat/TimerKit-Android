@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -56,7 +57,6 @@ fun RunningScreen(
         ActivityResultContracts.RequestPermission()
     ) { granted -> if (granted) vm.onLocationPermissionGranted() }
 
-    // 화면 진입 시마다 권한 상태 갱신
     LaunchedEffect(Unit) { vm.checkLocationPermission() }
 
     Column(
@@ -66,11 +66,22 @@ fun RunningScreen(
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // 모드 토글 (정지 상태일 때만)
+        if (!state.isRunning && !state.isFinished) {
+            ModeToggle(
+                selected = state.mode,
+                onSelect = vm::setMode
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+        }
 
         // 페이즈 라벨
         val (phaseLabel, phaseColor) = when {
             state.isFinished -> "DONE" to MaterialTheme.colorScheme.primary
+            state.mode == RunningMode.BASIC && state.isRunning -> "RUN" to MaterialTheme.colorScheme.error
+            state.mode == RunningMode.BASIC -> "기본 러닝" to MaterialTheme.colorScheme.secondary
             else -> when (state.phase) {
                 RunningPhase.WARMUP -> "WARMUP" to MaterialTheme.colorScheme.secondary
                 RunningPhase.RUN    -> "RUN"    to MaterialTheme.colorScheme.error
@@ -92,9 +103,13 @@ fun RunningScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 남은 시간
+        // 시간 표시: 기본 모드는 경과 시간(올라감), 인터벌은 카운트다운
+        val timeText = when {
+            state.mode == RunningMode.BASIC -> formatElapsed(state.totalElapsedMillis)
+            else -> formatCountdown(state.remainingMillis)
+        }
         Text(
-            text = formatCountdown(state.remainingMillis),
+            text = timeText,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             fontSize = 64.sp,
@@ -107,26 +122,28 @@ fun RunningScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 인터벌 진행
-        when {
-            state.isFinished -> Text(
-                text = "완료!",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            state.currentInterval > 0 -> Text(
-                text = "Interval ${state.currentInterval} / ${state.totalIntervals}",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        // 인터벌 진행 표시 (인터벌 모드만)
+        if (state.mode == RunningMode.INTERVAL) {
+            when {
+                state.isFinished -> Text(
+                    text = "완료!",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                state.currentInterval > 0 -> Text(
+                    text = "Interval ${state.currentInterval} / ${state.totalIntervals}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 위치 섹션
+        // 거리/페이스
         if (state.isLocationGranted) {
             LocationStatsRow(
-                distanceMeters = state.distanceMeters,
+                distanceMeters   = state.distanceMeters,
                 runElapsedMillis = state.runElapsedMillis
             )
         } else {
@@ -152,7 +169,7 @@ fun RunningScreen(
             ) { Text(if (state.isRunning) "Pause" else "Start") }
         }
 
-        // 완료 시 지도 결과 보기 버튼
+        // 완료 시 지도 결과 보기
         if (state.isFinished) {
             Spacer(modifier = Modifier.height(8.dp))
             Button(
@@ -163,8 +180,25 @@ fun RunningScreen(
             }
         }
 
-        // 설정 (정지 상태일 때만)
-        if (!state.isRunning && !state.isFinished) {
+        // km 페이스 기록 (기본 모드, 달리는 중 또는 완료)
+        if (state.mode == RunningMode.BASIC && state.kmPaceRecords.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(24.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "km 기록",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.Start)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            state.kmPaceRecords.forEach { record ->
+                KmPaceRow(record)
+            }
+        }
+
+        // 설정 (인터벌 모드, 정지 상태일 때만)
+        if (state.mode == RunningMode.INTERVAL && !state.isRunning && !state.isFinished) {
             Spacer(modifier = Modifier.height(32.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
@@ -224,19 +258,60 @@ fun RunningScreen(
 }
 
 @Composable
+private fun ModeToggle(selected: RunningMode, onSelect: (RunningMode) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        listOf(RunningMode.BASIC to "기본 러닝", RunningMode.INTERVAL to "인터벌").forEach { (mode, label) ->
+            val isSelected = selected == mode
+            if (isSelected) {
+                Button(
+                    onClick = { onSelect(mode) },
+                    modifier = Modifier.weight(1f)
+                ) { Text(label) }
+            } else {
+                OutlinedButton(
+                    onClick = { onSelect(mode) },
+                    modifier = Modifier.weight(1f)
+                ) { Text(label) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KmPaceRow(record: KmPaceRecord) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "${record.km} km",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = formatPaceSeconds(record.paceSeconds),
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
 private fun LocationStatsRow(distanceMeters: Float, runElapsedMillis: Long) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
-        StatBox(
-            label = "거리",
-            value = formatDistance(distanceMeters)
-        )
-        StatBox(
-            label = "페이스",
-            value = formatPace(distanceMeters, runElapsedMillis)
-        )
+        StatBox(label = "거리", value = formatDistance(distanceMeters))
+        StatBox(label = "페이스", value = formatPace(distanceMeters, runElapsedMillis))
     }
 }
 
@@ -307,7 +382,9 @@ private fun SettingRow(
     onDecrement: () -> Unit, onIncrement: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -327,6 +404,11 @@ private fun SettingRow(
             OutlinedButton(onClick = onIncrement) { Text("+") }
         }
     }
+}
+
+private fun formatElapsed(millis: Long): String {
+    val totalSeconds = millis / 1000
+    return "%02d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 }
 
 private fun formatCountdown(millis: Long): String {
