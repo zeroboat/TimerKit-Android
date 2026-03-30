@@ -29,6 +29,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zeroboat.timerkit.common.OverlayToggleButton
+import com.zeroboat.timerkit.common.TimerService
 
 @Composable
 fun TabataScreen(
@@ -36,6 +38,7 @@ fun TabataScreen(
     vm: TabataViewModel = viewModel()
 ) {
     val state by vm.uiState.collectAsState()
+    val isOverlayVisible by TimerService.isOverlayVisible.collectAsState()
 
     Column(
         modifier = modifier
@@ -119,6 +122,15 @@ fun TabataScreen(
             ) {
                 Text(if (state.isRunning) "Pause" else "Start")
             }
+        }
+
+        if (state.isRunning) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OverlayToggleButton(
+                isOverlayVisible = isOverlayVisible,
+                onToggle = vm::toggleOverlay,
+                modifier = Modifier.fillMaxWidth(0.5f)
+            )
         }
 
         // 설정 (정지 상태일 때만)

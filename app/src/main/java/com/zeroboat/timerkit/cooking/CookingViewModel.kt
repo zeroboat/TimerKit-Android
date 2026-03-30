@@ -101,6 +101,18 @@ class CookingViewModel(application: Application) : AndroidViewModel(application)
         if (runningCount() == 0) stopService() else updateService(buildNotificationText())
     }
 
+    fun toggleOverlay() {
+        val ctx = getApplication<Application>()
+        val action = if (TimerService.isOverlayVisible.value)
+            TimerService.ACTION_HIDE_OVERLAY
+        else
+            TimerService.ACTION_SHOW_OVERLAY
+        ctx.startService(Intent(ctx, TimerService::class.java).apply {
+            this.action = action
+            putExtra(TimerService.EXTRA_TEXT, buildNotificationText())
+        })
+    }
+
     private fun runningCount() = _uiState.value.timers.count { it.isRunning }
 
     private fun buildNotificationText(): String {

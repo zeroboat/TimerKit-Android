@@ -160,6 +160,27 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         stopService()
     }
 
+    fun toggleOverlay() {
+        val ctx = getApplication<Application>()
+        val action = if (TimerService.isOverlayVisible.value)
+            TimerService.ACTION_HIDE_OVERLAY
+        else
+            TimerService.ACTION_SHOW_OVERLAY
+        val s = _uiState.value
+        val text = when {
+            s.mode == RunningMode.BASIC -> "러닝 ${formatElapsedMillis(s.totalElapsedMillis)} · ${distanceText(s.distanceMeters)}"
+            else -> when (s.phase) {
+                RunningPhase.WARMUP -> "워밍업 ${s.remainingMillis / 1000}초"
+                RunningPhase.RUN    -> "러닝 ${s.currentInterval}/${s.totalIntervals} — ${s.remainingMillis / 1000}초"
+                RunningPhase.REST   -> "휴식 ${s.currentInterval}/${s.totalIntervals} — ${s.remainingMillis / 1000}초"
+            }
+        }
+        ctx.startService(Intent(ctx, TimerService::class.java).apply {
+            this.action = action
+            putExtra(TimerService.EXTRA_TEXT, text)
+        })
+    }
+
     fun updateSettings(totalIntervals: Int, warmupSeconds: Int, runSeconds: Int, restSeconds: Int) {
         if (_uiState.value.isRunning) return
         _uiState.update { it.copy(

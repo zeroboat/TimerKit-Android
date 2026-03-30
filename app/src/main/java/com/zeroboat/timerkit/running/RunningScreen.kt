@@ -39,6 +39,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zeroboat.timerkit.common.OverlayToggleButton
+import com.zeroboat.timerkit.common.TimerService
 
 @Composable
 fun RunningScreen(
@@ -46,6 +48,7 @@ fun RunningScreen(
     vm: RunningViewModel = viewModel()
 ) {
     val state by vm.uiState.collectAsState()
+    val isOverlayVisible by TimerService.isOverlayVisible.collectAsState()
     var showMap by rememberSaveable { mutableStateOf(false) }
 
     if (showMap) {
@@ -183,6 +186,15 @@ fun RunningScreen(
                     ) { Text("종료") }
                 }
             }
+        }
+
+        if (state.isRunning) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OverlayToggleButton(
+                isOverlayVisible = isOverlayVisible,
+                onToggle = vm::toggleOverlay,
+                modifier = Modifier.fillMaxWidth(0.5f)
+            )
         }
 
         // 완료 시 결과 요약 + 지도 보기
