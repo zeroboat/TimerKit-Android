@@ -157,20 +157,41 @@ fun RunningScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         // 컨트롤 버튼
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (state.isFinished) {
             OutlinedButton(
                 onClick = vm::reset,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.fillMaxWidth()
             ) { Text("Reset") }
-            Button(
-                onClick = { if (state.isRunning) vm.pause() else vm.start() },
-                enabled = !state.isFinished,
-                modifier = Modifier.weight(1f)
-            ) { Text(if (state.isRunning) "Pause" else "Start") }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedButton(
+                    onClick = vm::reset,
+                    modifier = Modifier.weight(1f)
+                ) { Text("Reset") }
+                Button(
+                    onClick = { if (state.isRunning) vm.pause() else vm.start() },
+                    modifier = Modifier.weight(1f)
+                ) { Text(if (state.isRunning) "Pause" else "Start") }
+                // 기본 러닝: 한 번 시작한 뒤 종료 버튼 노출
+                if (state.mode == RunningMode.BASIC && state.totalElapsedMillis > 0L) {
+                    Button(
+                        onClick = vm::finish,
+                        modifier = Modifier.weight(1f),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) { Text("종료") }
+                }
+            }
         }
 
-        // 완료 시 지도 결과 보기
+        // 완료 시 결과 요약 + 지도 보기
         if (state.isFinished) {
+            Spacer(modifier = Modifier.height(16.dp))
+            ResultSummaryCard(
+                distanceMeters = state.distanceMeters,
+                totalElapsedMillis = state.totalElapsedMillis
+            )
             Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = { showMap = true },
@@ -301,6 +322,39 @@ private fun KmPaceRow(record: KmPaceRecord) {
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface
         )
+    }
+}
+
+@Composable
+private fun ResultSummaryCard(distanceMeters: Float, totalElapsedMillis: Long) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "러닝 완료",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                StatBox(label = "거리", value = formatDistance(distanceMeters))
+                StatBox(label = "시간", value = formatElapsed(totalElapsedMillis))
+                StatBox(label = "평균 페이스", value = formatPace(distanceMeters, totalElapsedMillis))
+            }
+        }
     }
 }
 
