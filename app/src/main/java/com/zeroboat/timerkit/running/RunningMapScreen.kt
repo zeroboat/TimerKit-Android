@@ -106,10 +106,12 @@ fun RunningMapScreen(
             position = CameraPosition.fromLatLngZoom(routeLatLng.first(), 15f)
         }
     }
+    var isMapLoaded by remember { mutableStateOf(false) }
 
-    // 경로 전체가 보이도록 카메라 조정
-    LaunchedEffect(routeLatLng.size) {
-        if (routeLatLng.size >= 2) {
+    // 지도가 완전히 로드된 후 경로 전체가 보이도록 카메라 조정
+    // onMapLoaded 이전에 newLatLngBounds를 호출하면 뷰 크기 미확정으로 경로가 표시되지 않음
+    LaunchedEffect(isMapLoaded, routeLatLng.size) {
+        if (isMapLoaded && routeLatLng.size >= 2) {
             val bounds = LatLngBounds.Builder()
                 .apply { routeLatLng.forEach { include(it) } }
                 .build()
@@ -144,7 +146,8 @@ fun RunningMapScreen(
             } else {
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
-                    cameraPositionState = cameraPositionState
+                    cameraPositionState = cameraPositionState,
+                    onMapLoaded = { isMapLoaded = true }
                 ) {
                     Polyline(
                         points = routeLatLng,
