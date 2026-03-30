@@ -8,8 +8,8 @@ import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.zeroboat.timerkit.common.GpsPoint
 import com.zeroboat.timerkit.common.IntervalTimerHelper
-import com.zeroboat.timerkit.common.LocationTracker
 import com.zeroboat.timerkit.common.PreferencesKeys
 import com.zeroboat.timerkit.common.TimerService
 import com.zeroboat.timerkit.common.VibrationHelper
@@ -45,7 +45,7 @@ data class RunningUiState(
     val isLocationGranted: Boolean = false,
     val distanceMeters: Float = 0f,
     val runElapsedMillis: Long = 0L,
-    val routePoints: List<com.zeroboat.timerkit.common.GpsPoint> = emptyList(),
+    val routePoints: List<GpsPoint> = emptyList(),
     // km 페이스 기록
     val kmPaceRecords: List<KmPaceRecord> = emptyList(),
     val lastKmElapsedMillis: Long = 0L
@@ -57,7 +57,6 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
     val uiState: StateFlow<RunningUiState> = _uiState.asStateFlow()
 
     private val timer = IntervalTimerHelper(viewModelScope)
-    private val locationTracker = LocationTracker(application)
 
     init {
         viewModelScope.launch {
@@ -70,13 +69,14 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
             )}
         }
         checkLocationPermission()
+        // TimerService companion 흐름 관찰 (서비스 시작 여부와 무관하게 안정적으로 접근)
         viewModelScope.launch {
-            locationTracker.distanceMeters.collect { meters ->
+            TimerService.distanceMeters.collect { meters ->
                 _uiState.update { it.copy(distanceMeters = meters) }
             }
         }
         viewModelScope.launch {
-            locationTracker.routePoints.collect { points ->
+            TimerService.routePoints.collect { points ->
                 _uiState.update { it.copy(routePoints = points) }
             }
         }
@@ -92,7 +92,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
 
     fun onLocationPermissionGranted() {
         _uiState.update { it.copy(isLocationGranted = true) }
-        if (_uiState.value.isRunning) locationTracker.start()
+        if (_uiState.value.isRunning) startLocationTracking()
     }
 
     fun setMode(mode: RunningMode) {
@@ -109,8 +109,8 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                     phase = RunningPhase.RUN,
                     isRunning = true
                 )}
-                if (_uiState.value.isLocationGranted) locationTracker.start()
                 startService("러닝 중...")
+                if (_uiState.value.isLocationGranted) startLocationTracking()
                 timer.start { tickBasic() }
             }
             RunningMode.INTERVAL -> {
@@ -122,8 +122,8 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                     )}
                 }
                 _uiState.update { it.copy(isRunning = true) }
-                if (_uiState.value.isLocationGranted) locationTracker.start()
                 startService("러닝 워밍업 중...")
+                if (_uiState.value.isLocationGranted) startLocationTracking()
                 timer.start { tickInterval() }
             }
         }
@@ -131,14 +131,23 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
 
     fun pause() {
         timer.cancel()
-        locationTracker.stop()
         _uiState.update { it.copy(isRunning = false) }
+        stopService()  // ACTION_STOP: 위치 업데이트 제거 + 서비스 종료
+    }
+
+    fun finish() {
+        if (_uiState.value.mode != RunningMode.BASIC) return
+        timer.cancel()
+        VibrationHelper.doneBuzz(getApplication())
+        _uiState.update { it.copy(isRunning = false, isFinished = true) }
         stopService()
     }
 
     fun reset() {
         timer.cancel()
-        locationTracker.reset()
+        // companion 흐름 직접 초기화 (서비스 재시작 없이)
+        TimerService.distanceMeters.value = 0f
+        TimerService.routePoints.value = emptyList()
         val s = _uiState.value
         _uiState.value = RunningUiState(
             mode              = s.mode,
@@ -223,9 +232,8 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                 if (s.currentInterval >= s.totalIntervals) {
                     VibrationHelper.doneBuzz(getApplication())
                     timer.cancel()
-                    locationTracker.stop()
                     _uiState.update { it.copy(isRunning = false, isFinished = true, remainingMillis = 0L) }
-                    stopService()
+                    stopService()  // 위치 추적도 함께 종료
                 } else {
                     VibrationHelper.shortBuzz(getApplication())
                     _uiState.update { it.copy(
@@ -248,6 +256,13 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private fun startLocationTracking() {
+        val ctx = getApplication<Application>()
+        ctx.startService(Intent(ctx, TimerService::class.java).apply {
+            action = TimerService.ACTION_START_LOCATION
+        })
+    }
+
     private fun startService(text: String) {
         val ctx = getApplication<Application>()
         ContextCompat.startForegroundService(ctx, Intent(ctx, TimerService::class.java).apply {
@@ -266,7 +281,9 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
 
     private fun stopService() {
         val ctx = getApplication<Application>()
-        ctx.stopService(Intent(ctx, TimerService::class.java))
+        ctx.startService(Intent(ctx, TimerService::class.java).apply {
+            action = TimerService.ACTION_STOP
+        })
     }
 }
 
