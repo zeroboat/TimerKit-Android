@@ -107,6 +107,15 @@ class TabataViewModel(application: Application) : AndroidViewModel(application) 
         val newRemaining = s.remainingMillis - 100L
         if (newRemaining > 0) {
             _uiState.update { it.copy(remainingMillis = newRemaining) }
+            if (newRemaining % 1_000L == 0L) {
+                val remainSec = (newRemaining / 1000).toInt()
+                val text = when (s.phase) {
+                    TabataPhase.PREPARE -> "준비 ${remainSec}초"
+                    TabataPhase.WORK    -> "운동 ${s.currentSet}/${s.totalSets} — ${remainSec}초"
+                    TabataPhase.REST    -> "휴식 — ${remainSec}초"
+                }
+                updateService(text)
+            }
             return
         }
         when (s.phase) {
