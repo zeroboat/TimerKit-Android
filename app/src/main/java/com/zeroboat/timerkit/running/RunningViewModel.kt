@@ -135,6 +135,14 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         stopService()  // ACTION_STOP: 위치 업데이트 제거 + 서비스 종료
     }
 
+    fun finish() {
+        if (_uiState.value.mode != RunningMode.BASIC) return
+        timer.cancel()
+        VibrationHelper.doneBuzz(getApplication())
+        _uiState.update { it.copy(isRunning = false, isFinished = true) }
+        stopService()
+    }
+
     fun reset() {
         timer.cancel()
         // companion 흐름 직접 초기화 (서비스 재시작 없이)
