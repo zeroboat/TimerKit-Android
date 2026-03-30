@@ -1,6 +1,7 @@
 package com.zeroboat.timerkit.running
 
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +70,8 @@ fun RunningMapScreen(
     val context = LocalContext.current
     val activity = context as ComponentActivity
     var showContent by remember { mutableStateOf(false) }
+
+    BackHandler { onBack() }
 
     // 전면 광고 로드 → 표시 → 완료 시 콘텐츠 노출
     LaunchedEffect(Unit) {
