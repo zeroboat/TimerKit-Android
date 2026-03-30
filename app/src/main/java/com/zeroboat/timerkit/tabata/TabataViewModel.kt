@@ -84,6 +84,25 @@ class TabataViewModel(application: Application) : AndroidViewModel(application) 
         stopService()
     }
 
+    fun toggleOverlay() {
+        val ctx = getApplication<Application>()
+        val action = if (TimerService.isOverlayVisible.value)
+            TimerService.ACTION_HIDE_OVERLAY
+        else
+            TimerService.ACTION_SHOW_OVERLAY
+        val s = _uiState.value
+        val remainSec = s.remainingMillis / 1000
+        val text = when (s.phase) {
+            TabataPhase.PREPARE -> "준비 ${remainSec}초"
+            TabataPhase.WORK    -> "운동 ${s.currentSet}/${s.totalSets} — ${remainSec}초"
+            TabataPhase.REST    -> "휴식 — ${remainSec}초"
+        }
+        ctx.startService(Intent(ctx, TimerService::class.java).apply {
+            this.action = action
+            putExtra(TimerService.EXTRA_TEXT, text)
+        })
+    }
+
     fun updateSettings(totalSets: Int, prepareSeconds: Int, workSeconds: Int, restSeconds: Int) {
         if (_uiState.value.isRunning) return
         _uiState.value = TabataUiState(
@@ -107,6 +126,15 @@ class TabataViewModel(application: Application) : AndroidViewModel(application) 
         val newRemaining = s.remainingMillis - 100L
         if (newRemaining > 0) {
             _uiState.update { it.copy(remainingMillis = newRemaining) }
+            if (newRemaining % 1_000L == 0L) {
+                val remainSec = (newRemaining / 1000).toInt()
+                val text = when (s.phase) {
+                    TabataPhase.PREPARE -> "준비 ${remainSec}초"
+                    TabataPhase.WORK    -> "운동 ${s.currentSet}/${s.totalSets} — ${remainSec}초"
+                    TabataPhase.REST    -> "휴식 — ${remainSec}초"
+                }
+                updateService(text)
+            }
             return
         }
         when (s.phase) {

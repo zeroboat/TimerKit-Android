@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zeroboat.timerkit.common.OverlayToggleButton
+import com.zeroboat.timerkit.common.TimerService
 
 @Composable
 fun StopwatchScreen(
@@ -33,6 +35,7 @@ fun StopwatchScreen(
     vm: StopwatchViewModel = viewModel()
 ) {
     val state by vm.uiState.collectAsState()
+    val isOverlayVisible by TimerService.isOverlayVisible.collectAsState()
 
     Column(
         modifier = modifier
@@ -86,6 +89,15 @@ fun StopwatchScreen(
             ) {
                 Text("Lap")
             }
+        }
+
+        if (state.isRunning) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OverlayToggleButton(
+                isOverlayVisible = isOverlayVisible,
+                onToggle = vm::toggleOverlay,
+                modifier = Modifier.fillMaxWidth(0.5f)
+            )
         }
 
         Spacer(modifier = Modifier.height(32.dp))

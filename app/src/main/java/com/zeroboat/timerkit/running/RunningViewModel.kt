@@ -160,6 +160,27 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         stopService()
     }
 
+    fun toggleOverlay() {
+        val ctx = getApplication<Application>()
+        val action = if (TimerService.isOverlayVisible.value)
+            TimerService.ACTION_HIDE_OVERLAY
+        else
+            TimerService.ACTION_SHOW_OVERLAY
+        val s = _uiState.value
+        val text = when {
+            s.mode == RunningMode.BASIC -> "러닝 ${formatElapsedMillis(s.totalElapsedMillis)} · ${distanceText(s.distanceMeters)}"
+            else -> when (s.phase) {
+                RunningPhase.WARMUP -> "워밍업 ${s.remainingMillis / 1000}초"
+                RunningPhase.RUN    -> "러닝 ${s.currentInterval}/${s.totalIntervals} — ${s.remainingMillis / 1000}초"
+                RunningPhase.REST   -> "휴식 ${s.currentInterval}/${s.totalIntervals} — ${s.remainingMillis / 1000}초"
+            }
+        }
+        ctx.startService(Intent(ctx, TimerService::class.java).apply {
+            this.action = action
+            putExtra(TimerService.EXTRA_TEXT, text)
+        })
+    }
+
     fun updateSettings(totalIntervals: Int, warmupSeconds: Int, runSeconds: Int, restSeconds: Int) {
         if (_uiState.value.isRunning) return
         _uiState.update { it.copy(
@@ -203,6 +224,9 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                 totalElapsedMillis = newElapsed,
                 runElapsedMillis   = newRunElapsed
             )}
+            if (newElapsed % 1_000L == 0L) {
+                updateService("러닝 중 ${formatElapsedMillis(newElapsed)} · ${distanceText(s.distanceMeters)}")
+            }
         }
     }
 
@@ -216,6 +240,15 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                 runElapsedMillis = if (s.phase == RunningPhase.RUN) s.runElapsedMillis + 100L
                                    else s.runElapsedMillis
             )}
+            if (newRemaining % 1_000L == 0L) {
+                val remainSec = (newRemaining / 1000).toInt()
+                val text = when (s.phase) {
+                    RunningPhase.WARMUP -> "워밍업 ${remainSec}초"
+                    RunningPhase.RUN    -> "러닝 ${s.currentInterval}/${s.totalIntervals} — ${remainSec}초"
+                    RunningPhase.REST   -> "휴식 ${s.currentInterval}/${s.totalIntervals} — ${remainSec}초"
+                }
+                updateService(text)
+            }
             return
         }
         when (s.phase) {
@@ -292,3 +325,12 @@ fun formatPaceSeconds(paceSeconds: Int): String {
     val sec = paceSeconds % 60
     return "$min'%02d\"".format(sec)
 }
+
+private fun formatElapsedMillis(millis: Long): String {
+    val totalSeconds = millis / 1000
+    return "%02d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+}
+
+private fun distanceText(meters: Float): String =
+    if (meters < 1000) "${"%.0f".format(meters)}m"
+    else "${"%.1f".format(meters / 1000)}km"
