@@ -196,6 +196,24 @@ fun RunningMapScreen(
                     }
                 }
 
+                // 심박수 결과 (데이터 있을 때만)
+                if (state.avgHeartRateBpm != null || state.maxHeartRateBpm != null) {
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        state.avgHeartRateBpm?.let {
+                            ResultStat(label = "평균 심박수", value = "$it BPM")
+                        }
+                        state.maxHeartRateBpm?.let {
+                            ResultStat(label = "최대 심박수", value = "$it BPM")
+                        }
+                    }
+                }
+
                 // km 페이스 기록 (기본 모드)
                 if (state.mode == RunningMode.BASIC && state.kmPaceRecords.isNotEmpty()) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))

@@ -39,6 +39,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.health.connect.client.PermissionController
 import com.zeroboat.timerkit.common.OverlayToggleButton
 import com.zeroboat.timerkit.common.TimerService
 
@@ -59,6 +61,12 @@ fun RunningScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> if (granted) vm.onLocationPermissionGranted() }
+
+    val heartRateLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) { granted ->
+        if (granted.containsAll(vm.heartRatePermissions)) vm.onHeartRatePermissionGranted()
+    }
 
     LaunchedEffect(Unit) { vm.checkLocationPermission() }
 
@@ -156,6 +164,14 @@ fun RunningScreen(
                 }
             )
         }
+
+        // 심박수
+        HeartRateRow(
+            bpm = state.heartRateBpm,
+            isAvailable = vm.isHeartRateAvailable,
+            isRunning = state.isRunning,
+            onRequestPermission = { heartRateLauncher.launch(vm.heartRatePermissions) }
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -438,6 +454,59 @@ private fun LocationPermissionBanner(onRequest: () -> Unit) {
             }
             Spacer(modifier = Modifier.width(12.dp))
             OutlinedButton(onClick = onRequest) { Text("허용") }
+        }
+    }
+}
+
+@Composable
+private fun HeartRateRow(
+    bpm: Int?,
+    isAvailable: Boolean,
+    isRunning: Boolean,
+    onRequestPermission: () -> Unit
+) {
+    if (!isAvailable) return
+    Spacer(modifier = Modifier.height(8.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "심박수",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (bpm != null) {
+                    Text(
+                        text = "$bpm BPM",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                } else {
+                    Text(
+                        text = if (isRunning) "데이터 수신 대기 중..." else "워치 연결 필요",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (bpm == null && !isRunning) {
+                Spacer(modifier = Modifier.width(12.dp))
+                OutlinedButton(onClick = onRequestPermission) { Text("허용") }
+            }
         }
     }
 }
