@@ -11,6 +11,8 @@ import androidx.lifecycle.viewModelScope
 import com.zeroboat.timerkit.common.GpsPoint
 import com.zeroboat.timerkit.common.HeartRateTracker
 import com.zeroboat.timerkit.common.IntervalTimerHelper
+import com.zeroboat.timerkit.common.MusicController
+import com.zeroboat.timerkit.common.MusicState
 import com.zeroboat.timerkit.common.PreferencesKeys
 import com.zeroboat.timerkit.common.TimerService
 import com.zeroboat.timerkit.common.VibrationHelper
@@ -56,7 +58,10 @@ data class RunningUiState(
     val heartRateBpm: Int? = null,
     val avgHeartRateBpm: Int? = null,
     val maxHeartRateBpm: Int? = null,
-    val heartRateSamples: List<Int> = emptyList()
+    val heartRateSamples: List<Int> = emptyList(),
+    // 음악
+    val musicState: MusicState? = null,
+    val isMusicPermissionGranted: Boolean = false
 )
 
 class RunningViewModel(application: Application) : AndroidViewModel(application) {
@@ -71,6 +76,9 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
     val isHeartRateAvailable: Boolean get() = heartRateTracker.isAvailable()
     val heartRatePermissions get() = heartRateTracker.permissions
 
+    private val musicController = MusicController(application)
+    private var musicJob: Job? = null
+
     init {
         viewModelScope.launch {
             val prefs = getApplication<Application>().appDataStore.data.first()
@@ -82,6 +90,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
             )}
         }
         checkLocationPermission()
+        checkMusicPermission()
         // TimerService companion 흐름 관찰 (서비스 시작 여부와 무관하게 안정적으로 접근)
         viewModelScope.launch {
             TimerService.distanceMeters.collect { meters ->
@@ -126,6 +135,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                 if (_uiState.value.isLocationGranted) startLocationTracking()
                 timer.start { tickBasic() }
                 startHeartRatePolling()
+                startMusicPolling()
             }
             RunningMode.INTERVAL -> {
                 if (s.remainingMillis == 0L) {
@@ -140,6 +150,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                 if (_uiState.value.isLocationGranted) startLocationTracking()
                 timer.start { tickInterval() }
                 startHeartRatePolling()
+                startMusicPolling()
             }
         }
     }
@@ -147,6 +158,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
     fun pause() {
         timer.cancel()
         stopHeartRatePolling()
+        stopMusicPolling()
         _uiState.update { it.copy(isRunning = false) }
         stopService()
     }
@@ -155,6 +167,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         if (_uiState.value.mode != RunningMode.BASIC) return
         timer.cancel()
         stopHeartRatePolling()
+        stopMusicPolling()
         VibrationHelper.doneBuzz(getApplication())
         _uiState.update { it.copy(isRunning = false, isFinished = true) }
         stopService()
@@ -163,6 +176,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
     fun reset() {
         timer.cancel()
         stopHeartRatePolling()
+        stopMusicPolling()
         TimerService.distanceMeters.value = 0f
         TimerService.routePoints.value = emptyList()
         val s = _uiState.value
@@ -206,6 +220,30 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         heartRateJob?.cancel()
         heartRateJob = null
     }
+
+    fun checkMusicPermission() {
+        _uiState.update { it.copy(isMusicPermissionGranted = musicController.isPermissionGranted()) }
+    }
+
+    private fun startMusicPolling() {
+        if (!musicController.isPermissionGranted()) return
+        musicJob?.cancel()
+        musicJob = viewModelScope.launch {
+            while (true) {
+                _uiState.update { it.copy(musicState = musicController.getCurrentState()) }
+                delay(1_000L)
+            }
+        }
+    }
+
+    private fun stopMusicPolling() {
+        musicJob?.cancel()
+        musicJob = null
+    }
+
+    fun musicTogglePlayPause() = musicController.togglePlayPause()
+    fun musicPrevious() = musicController.previous()
+    fun musicNext() = musicController.next()
 
     fun toggleOverlay() {
         val ctx = getApplication<Application>()
