@@ -9,11 +9,14 @@ import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeroboat.timerkit.common.GpsPoint
+import com.zeroboat.timerkit.common.HeartRateTracker
 import com.zeroboat.timerkit.common.IntervalTimerHelper
 import com.zeroboat.timerkit.common.PreferencesKeys
 import com.zeroboat.timerkit.common.TimerService
 import com.zeroboat.timerkit.common.VibrationHelper
 import com.zeroboat.timerkit.common.appDataStore
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,7 +51,12 @@ data class RunningUiState(
     val routePoints: List<GpsPoint> = emptyList(),
     // km 페이스 기록
     val kmPaceRecords: List<KmPaceRecord> = emptyList(),
-    val lastKmElapsedMillis: Long = 0L
+    val lastKmElapsedMillis: Long = 0L,
+    // 심박수
+    val heartRateBpm: Int? = null,
+    val avgHeartRateBpm: Int? = null,
+    val maxHeartRateBpm: Int? = null,
+    val heartRateSamples: List<Int> = emptyList()
 )
 
 class RunningViewModel(application: Application) : AndroidViewModel(application) {
@@ -57,6 +65,11 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
     val uiState: StateFlow<RunningUiState> = _uiState.asStateFlow()
 
     private val timer = IntervalTimerHelper(viewModelScope)
+    private val heartRateTracker = HeartRateTracker(application)
+    private var heartRateJob: Job? = null
+
+    val isHeartRateAvailable: Boolean get() = heartRateTracker.isAvailable()
+    val heartRatePermissions get() = heartRateTracker.permissions
 
     init {
         viewModelScope.launch {
@@ -112,6 +125,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                 startService("러닝 중...")
                 if (_uiState.value.isLocationGranted) startLocationTracking()
                 timer.start { tickBasic() }
+                startHeartRatePolling()
             }
             RunningMode.INTERVAL -> {
                 if (s.remainingMillis == 0L) {
@@ -125,19 +139,22 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                 startService("러닝 워밍업 중...")
                 if (_uiState.value.isLocationGranted) startLocationTracking()
                 timer.start { tickInterval() }
+                startHeartRatePolling()
             }
         }
     }
 
     fun pause() {
         timer.cancel()
+        stopHeartRatePolling()
         _uiState.update { it.copy(isRunning = false) }
-        stopService()  // ACTION_STOP: 위치 업데이트 제거 + 서비스 종료
+        stopService()
     }
 
     fun finish() {
         if (_uiState.value.mode != RunningMode.BASIC) return
         timer.cancel()
+        stopHeartRatePolling()
         VibrationHelper.doneBuzz(getApplication())
         _uiState.update { it.copy(isRunning = false, isFinished = true) }
         stopService()
@@ -145,7 +162,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
 
     fun reset() {
         timer.cancel()
-        // companion 흐름 직접 초기화 (서비스 재시작 없이)
+        stopHeartRatePolling()
         TimerService.distanceMeters.value = 0f
         TimerService.routePoints.value = emptyList()
         val s = _uiState.value
@@ -158,6 +175,36 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
             isLocationGranted = s.isLocationGranted
         )
         stopService()
+    }
+
+    fun onHeartRatePermissionGranted() {
+        if (_uiState.value.isRunning) startHeartRatePolling()
+    }
+
+    private fun startHeartRatePolling() {
+        if (!heartRateTracker.isAvailable()) return
+        heartRateJob?.cancel()
+        heartRateJob = viewModelScope.launch {
+            if (!heartRateTracker.hasPermission()) return@launch
+            while (true) {
+                val bpm = heartRateTracker.getLatestBpm()
+                if (bpm != null) {
+                    val samples = _uiState.value.heartRateSamples + bpm
+                    _uiState.update { it.copy(
+                        heartRateBpm     = bpm,
+                        heartRateSamples = samples,
+                        avgHeartRateBpm  = samples.average().toInt(),
+                        maxHeartRateBpm  = samples.max()
+                    )}
+                }
+                delay(5_000L)
+            }
+        }
+    }
+
+    private fun stopHeartRatePolling() {
+        heartRateJob?.cancel()
+        heartRateJob = null
     }
 
     fun toggleOverlay() {
