@@ -1,6 +1,7 @@
 package com.zeroboat.timerkit.running
 
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +70,8 @@ fun RunningMapScreen(
     val context = LocalContext.current
     val activity = context as ComponentActivity
     var showContent by remember { mutableStateOf(false) }
+
+    BackHandler { onBack() }
 
     // 전면 광고 로드 → 표시 → 완료 시 콘텐츠 노출
     LaunchedEffect(Unit) {
@@ -190,6 +193,24 @@ fun RunningMapScreen(
                         ResultStat(label = "인터벌", value = "${state.totalIntervals}회")
                     } else {
                         ResultStat(label = "시간", value = formatElapsed(state.totalElapsedMillis))
+                    }
+                }
+
+                // 심박수 결과 (데이터 있을 때만)
+                if (state.avgHeartRateBpm != null || state.maxHeartRateBpm != null) {
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        state.avgHeartRateBpm?.let {
+                            ResultStat(label = "평균 심박수", value = "$it BPM")
+                        }
+                        state.maxHeartRateBpm?.let {
+                            ResultStat(label = "최대 심박수", value = "$it BPM")
+                        }
                     }
                 }
 

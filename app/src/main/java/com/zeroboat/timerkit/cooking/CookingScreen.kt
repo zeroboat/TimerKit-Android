@@ -40,6 +40,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zeroboat.timerkit.common.OverlayToggleButton
+import com.zeroboat.timerkit.common.TimerService
 
 @Composable
 fun CookingScreen(
@@ -47,7 +49,9 @@ fun CookingScreen(
     vm: CookingViewModel = viewModel()
 ) {
     val state by vm.uiState.collectAsState()
+    val isOverlayVisible by TimerService.isOverlayVisible.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
+    val anyRunning = state.timers.any { it.isRunning }
 
     Box(modifier = modifier.fillMaxSize()) {
         if (state.timers.isEmpty()) {
@@ -95,6 +99,15 @@ fun CookingScreen(
                 .padding(16.dp)
         ) {
             Icon(Icons.Default.Add, contentDescription = "타이머 추가")
+        }
+
+        if (anyRunning) {
+            Box(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+                OverlayToggleButton(
+                    isOverlayVisible = isOverlayVisible,
+                    onToggle = vm::toggleOverlay
+                )
+            }
         }
     }
 

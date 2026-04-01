@@ -1,11 +1,10 @@
 package com.zeroboat.timerkit.running
 
 import android.Manifest
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,31 +13,52 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.health.connect.client.PermissionController
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zeroboat.timerkit.common.MusicState
+import com.zeroboat.timerkit.common.OverlayToggleButton
+import com.zeroboat.timerkit.common.TimerService
 
 @Composable
 fun RunningScreen(
@@ -46,6 +66,7 @@ fun RunningScreen(
     vm: RunningViewModel = viewModel()
 ) {
     val state by vm.uiState.collectAsState()
+    val isOverlayVisible by TimerService.isOverlayVisible.collectAsState()
     var showMap by rememberSaveable { mutableStateOf(false) }
 
     if (showMap) {
@@ -56,6 +77,22 @@ fun RunningScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> if (granted) vm.onLocationPermissionGranted() }
+
+    val heartRateLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) { granted ->
+        if (granted.containsAll(vm.heartRatePermissions)) vm.onHeartRatePermissionGranted()
+    }
+
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) vm.checkMusicPermission()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     LaunchedEffect(Unit) { vm.checkLocationPermission() }
 
@@ -154,6 +191,29 @@ fun RunningScreen(
             )
         }
 
+        // 심박수
+        HeartRateRow(
+            bpm = state.heartRateBpm,
+            isAvailable = vm.isHeartRateAvailable,
+            isRunning = state.isRunning,
+            onRequestPermission = { heartRateLauncher.launch(vm.heartRatePermissions) }
+        )
+
+        // 음악 컨트롤
+        MusicControlRow(
+            musicState = state.musicState,
+            isPermissionGranted = state.isMusicPermissionGranted,
+            onRequestPermission = {
+                context.startActivity(
+                    Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            },
+            onTogglePlayPause = vm::musicTogglePlayPause,
+            onPrevious = vm::musicPrevious,
+            onNext = vm::musicNext
+        )
+
         Spacer(modifier = Modifier.height(24.dp))
 
         // 컨트롤 버튼
@@ -183,6 +243,15 @@ fun RunningScreen(
                     ) { Text("종료") }
                 }
             }
+        }
+
+        if (state.isRunning) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OverlayToggleButton(
+                isOverlayVisible = isOverlayVisible,
+                onToggle = vm::toggleOverlay,
+                modifier = Modifier.fillMaxWidth(0.5f)
+            )
         }
 
         // 완료 시 결과 요약 + 지도 보기
@@ -431,6 +500,59 @@ private fun LocationPermissionBanner(onRequest: () -> Unit) {
 }
 
 @Composable
+private fun HeartRateRow(
+    bpm: Int?,
+    isAvailable: Boolean,
+    isRunning: Boolean,
+    onRequestPermission: () -> Unit
+) {
+    if (!isAvailable) return
+    Spacer(modifier = Modifier.height(8.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "심박수",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (bpm != null) {
+                    Text(
+                        text = "$bpm BPM",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                } else {
+                    Text(
+                        text = if (isRunning) "데이터 수신 대기 중..." else "워치 연결 필요",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (bpm == null && !isRunning) {
+                Spacer(modifier = Modifier.width(12.dp))
+                OutlinedButton(onClick = onRequestPermission) { Text("허용") }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SettingRow(
     label: String, value: Int, unit: String, min: Int,
     onDecrement: () -> Unit, onIncrement: () -> Unit
@@ -456,6 +578,105 @@ private fun SettingRow(
                 fontFamily = FontFamily.Monospace
             )
             OutlinedButton(onClick = onIncrement) { Text("+") }
+        }
+    }
+}
+
+@Composable
+private fun MusicControlRow(
+    musicState: MusicState?,
+    isPermissionGranted: Boolean,
+    onRequestPermission: () -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit
+) {
+    Spacer(modifier = Modifier.height(8.dp))
+    if (!isPermissionGranted) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "음악 컨트롤",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "알림 접근 허용 시 음악을 컨트롤할 수 있습니다",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                OutlinedButton(onClick = onRequestPermission) { Text("허용") }
+            }
+        }
+    } else if (musicState != null) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = musicState.title ?: "알 수 없는 곡",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (musicState.artist != null) {
+                        Text(
+                            text = musicState.artist,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                IconButton(onClick = onPrevious) {
+                    Icon(
+                        Icons.Filled.SkipPrevious,
+                        contentDescription = "이전 곡",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                IconButton(onClick = onTogglePlayPause) {
+                    Icon(
+                        if (musicState.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (musicState.isPlaying) "일시정지" else "재생",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                IconButton(onClick = onNext) {
+                    Icon(
+                        Icons.Filled.SkipNext,
+                        contentDescription = "다음 곡",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
         }
     }
 }
