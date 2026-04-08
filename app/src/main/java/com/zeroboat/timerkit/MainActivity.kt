@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.OutdoorGrill
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Card
@@ -52,7 +53,6 @@ import com.zeroboat.timerkit.BuildConfig
 import com.zeroboat.timerkit.common.AdHelper
 import com.zeroboat.timerkit.cooking.CookingScreen
 import com.zeroboat.timerkit.running.RunningScreen
-import com.zeroboat.timerkit.stopwatch.StopwatchScreen
 import com.zeroboat.timerkit.tabata.TabataScreen
 import com.zeroboat.timerkit.ui.theme.TimerKitAndroidTheme
 
@@ -95,14 +95,14 @@ fun TimerKitAndroidApp() {
     ) {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             when (currentDestination) {
-                AppDestinations.StopWatch -> StopwatchScreen(modifier = Modifier.padding(innerPadding))
+                AppDestinations.MultiTimer -> CookingScreen(modifier = Modifier.padding(innerPadding))
                 AppDestinations.Tabata -> TabataScreen(modifier = Modifier.padding(innerPadding))
                 AppDestinations.HOME -> HomeScreen(
                     modifier = Modifier.padding(innerPadding),
                     onNavigate = { currentDestination = it }
                 )
-                AppDestinations.Cooking -> CookingScreen(modifier = Modifier.padding(innerPadding))
                 AppDestinations.Running -> RunningScreen(modifier = Modifier.padding(innerPadding))
+                AppDestinations.Cooking -> CookingPlaceholderScreen(modifier = Modifier.padding(innerPadding))
             }
         }
     }
@@ -112,11 +112,11 @@ enum class AppDestinations(
     val label: String,
     val icon: ImageVector,
 ) {
-    StopWatch("StopWatch", Icons.Filled.Timer),
+    MultiTimer("Multi", Icons.Filled.Layers),
     Tabata("Tabata", Icons.Filled.FitnessCenter),
     HOME("Home", Icons.Default.Home),
-    Cooking("Cooking", Icons.Filled.OutdoorGrill),
     Running("Running", Icons.AutoMirrored.Filled.DirectionsRun),
+    Cooking("Cooking", Icons.Filled.OutdoorGrill),
 }
 
 private data class TimerShortcut(
@@ -127,10 +127,10 @@ private data class TimerShortcut(
 )
 
 private val shortcuts = listOf(
-    TimerShortcut(AppDestinations.StopWatch, Icons.Filled.Timer, "스톱워치", "시간 측정 + 랩 기록"),
+    TimerShortcut(AppDestinations.MultiTimer, Icons.Filled.Layers, "멀티 타이머", "여러 타이머 동시 실행"),
     TimerShortcut(AppDestinations.Tabata, Icons.Filled.FitnessCenter, "Tabata", "인터벌 운동 타이머"),
     TimerShortcut(AppDestinations.Running, Icons.AutoMirrored.Filled.DirectionsRun, "러닝", "워밍업 + 인터벌 러닝"),
-    TimerShortcut(AppDestinations.Cooking, Icons.Filled.OutdoorGrill, "쿠킹", "다중 타이머 동시 실행"),
+    TimerShortcut(AppDestinations.Cooking, Icons.Filled.OutdoorGrill, "쿠킹", "레시피 기반 타이머 (준비 중)"),
 )
 
 @Composable
@@ -192,6 +192,36 @@ private fun BannerAd(modifier: Modifier = Modifier) {
             }
         }
     )
+}
+
+@Composable
+fun CookingPlaceholderScreen(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Filled.OutdoorGrill,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "쿠킹 타이머",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "레시피 기반 타이머 자동 생성 기능이\n곧 업데이트될 예정입니다",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+    }
 }
 
 @Composable
