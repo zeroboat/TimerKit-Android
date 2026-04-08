@@ -95,12 +95,12 @@ fun TimerKitAndroidApp() {
     ) {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             when (currentDestination) {
+                AppDestinations.MultiTimer -> CookingScreen(modifier = Modifier.padding(innerPadding))
                 AppDestinations.Tabata -> TabataScreen(modifier = Modifier.padding(innerPadding))
                 AppDestinations.HOME -> HomeScreen(
                     modifier = Modifier.padding(innerPadding),
                     onNavigate = { currentDestination = it }
                 )
-                AppDestinations.MultiTimer -> CookingScreen(modifier = Modifier.padding(innerPadding))
                 AppDestinations.Running -> RunningScreen(modifier = Modifier.padding(innerPadding))
                 AppDestinations.Cooking -> CookingPlaceholderScreen(modifier = Modifier.padding(innerPadding))
             }
@@ -112,11 +112,11 @@ enum class AppDestinations(
     val label: String,
     val icon: ImageVector,
 ) {
+    MultiTimer("Multi", Icons.Filled.Layers),
     Tabata("Tabata", Icons.Filled.FitnessCenter),
     HOME("Home", Icons.Default.Home),
-    MultiTimer("멀티 타이머", Icons.Filled.Layers),
     Running("Running", Icons.AutoMirrored.Filled.DirectionsRun),
-    Cooking("쿠킹", Icons.Filled.OutdoorGrill),
+    Cooking("Cooking", Icons.Filled.OutdoorGrill),
 }
 
 private data class TimerShortcut(
