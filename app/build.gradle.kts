@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
+    id("com.google.devtools.ksp") version "2.0.21-1.0.28"
 }
 
 val localProperties = Properties().apply {
@@ -23,8 +24,8 @@ android {
         applicationId = "com.zeroboat.timerkit"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["MAPS_API_KEY"] = localProperties["MAPS_API_KEY"] ?: ""
@@ -84,6 +85,9 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation(libs.health.connect)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
