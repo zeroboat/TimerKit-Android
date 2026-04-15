@@ -17,6 +17,7 @@ import com.zeroboat.timerkit.common.PreferencesKeys
 import com.zeroboat.timerkit.common.TimerService
 import com.zeroboat.timerkit.common.VibrationHelper
 import com.zeroboat.timerkit.common.appDataStore
+import com.zeroboat.timerkit.history.RunningRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +80,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
 
     private val musicController = MusicController(application)
     private var musicJob: Job? = null
+    private val runningRepository = RunningRepository(application)
 
     init {
         viewModelScope.launch {
@@ -171,8 +173,10 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         stopHeartRatePolling()
         stopMusicPolling()
         VibrationHelper.doneBuzz(getApplication())
+        val s = _uiState.value
         _uiState.update { it.copy(isRunning = false, isFinished = true) }
         stopService()
+        saveRecord(s)
     }
 
     fun reset() {
@@ -256,6 +260,24 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
     fun musicTogglePlayPause() = musicController.togglePlayPause()
     fun musicPrevious() = musicController.previous()
     fun musicNext() = musicController.next()
+
+    fun getRecord(id: Long, onResult: (com.zeroboat.timerkit.history.RunningRecord?) -> Unit) {
+        viewModelScope.launch { onResult(runningRepository.getById(id)) }
+    }
+
+    private fun saveRecord(s: RunningUiState) {
+        viewModelScope.launch {
+            runningRepository.save(
+                mode = s.mode.name,
+                durationMillis = s.totalElapsedMillis,
+                distanceMeters = s.distanceMeters,
+                avgHeartRateBpm = s.avgHeartRateBpm,
+                maxHeartRateBpm = s.maxHeartRateBpm,
+                routePoints = s.routePoints,
+                kmPaceRecords = s.kmPaceRecords
+            )
+        }
+    }
 
     fun toggleOverlay() {
         val ctx = getApplication<Application>()
@@ -362,8 +384,10 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                 if (s.currentInterval >= s.totalIntervals) {
                     VibrationHelper.doneBuzz(getApplication())
                     timer.cancel()
+                    val finished = _uiState.value
                     _uiState.update { it.copy(isRunning = false, isFinished = true, remainingMillis = 0L) }
-                    stopService()  // 위치 추적도 함께 종료
+                    stopService()
+                    saveRecord(finished)
                 } else {
                     VibrationHelper.shortBuzz(getApplication())
                     _uiState.update { it.copy(

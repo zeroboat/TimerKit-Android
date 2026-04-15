@@ -63,6 +63,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zeroboat.timerkit.common.MusicState
 import com.zeroboat.timerkit.common.OverlayToggleButton
 import com.zeroboat.timerkit.common.TimerService
+import com.zeroboat.timerkit.history.RunningHistoryDetailScreen
+import com.zeroboat.timerkit.history.RunningHistoryScreen
+import com.zeroboat.timerkit.history.RunningRecord
 
 @Composable
 fun RunningScreen(
@@ -72,6 +75,23 @@ fun RunningScreen(
     val state by vm.uiState.collectAsState()
     val isOverlayVisible by TimerService.isOverlayVisible.collectAsState()
     var showMap by rememberSaveable { mutableStateOf(false) }
+    var showHistory by rememberSaveable { mutableStateOf(false) }
+    var historyDetailRecord by remember { mutableStateOf<RunningRecord?>(null) }
+
+    historyDetailRecord?.let { record ->
+        RunningHistoryDetailScreen(record = record, onBack = { historyDetailRecord = null })
+        return
+    }
+
+    if (showHistory) {
+        RunningHistoryScreen(
+            onBack = { showHistory = false },
+            onSelectRecord = { id ->
+                vm.getRecord(id) { historyDetailRecord = it }
+            }
+        )
+        return
+    }
 
     if (showMap) {
         RunningMapScreen(state = state, onBack = { showMap = false })
@@ -110,7 +130,20 @@ fun RunningScreen(
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 기록 보기 버튼 (정지 상태일 때만)
+        if (!state.isRunning && !state.isFinished) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                OutlinedButton(onClick = { showHistory = true }) {
+                    Text("기록 보기")
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         // 모드 토글 (정지 상태일 때만)
         if (!state.isRunning && !state.isFinished) {
