@@ -59,6 +59,7 @@ data class RunningUiState(
     val avgHeartRateBpm: Int? = null,
     val maxHeartRateBpm: Int? = null,
     val heartRateSamples: List<Int> = emptyList(),
+    val isHeartRatePermissionGranted: Boolean = false,
     // 음악
     val musicState: MusicState? = null,
     val isMusicPermissionGranted: Boolean = false
@@ -91,6 +92,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         }
         checkLocationPermission()
         checkMusicPermission()
+        viewModelScope.launch { checkHeartRatePermission() }
         // TimerService companion 흐름 관찰 (서비스 시작 여부와 무관하게 안정적으로 접근)
         viewModelScope.launch {
             TimerService.distanceMeters.collect { meters ->
@@ -192,7 +194,17 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun onHeartRatePermissionGranted() {
+        _uiState.update { it.copy(isHeartRatePermissionGranted = true) }
         if (_uiState.value.isRunning) startHeartRatePolling()
+    }
+
+    fun refreshHeartRatePermission() {
+        viewModelScope.launch { checkHeartRatePermission() }
+    }
+
+    suspend fun checkHeartRatePermission() {
+        val granted = heartRateTracker.hasPermission()
+        _uiState.update { it.copy(isHeartRatePermissionGranted = granted) }
     }
 
     private fun startHeartRatePolling() {

@@ -18,10 +18,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -33,12 +35,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -88,7 +92,10 @@ fun RunningScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) vm.checkMusicPermission()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                vm.checkMusicPermission()
+                vm.refreshHeartRatePermission()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -195,6 +202,7 @@ fun RunningScreen(
         HeartRateRow(
             bpm = state.heartRateBpm,
             isAvailable = vm.isHeartRateAvailable,
+            isPermissionGranted = state.isHeartRatePermissionGranted,
             isRunning = state.isRunning,
             onRequestPermission = { heartRateLauncher.launch(vm.heartRatePermissions) }
         )
@@ -503,10 +511,42 @@ private fun LocationPermissionBanner(onRequest: () -> Unit) {
 private fun HeartRateRow(
     bpm: Int?,
     isAvailable: Boolean,
+    isPermissionGranted: Boolean,
     isRunning: Boolean,
     onRequestPermission: () -> Unit
 ) {
     if (!isAvailable) return
+    var showHelp by remember { mutableStateOf(false) }
+
+    if (showHelp) {
+        AlertDialog(
+            onDismissRequest = { showHelp = false },
+            title = { Text("심박수 연동 안내") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "연동이 안 될 때 확인하세요",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    HelpItem("1", "워치에서 심박수 측정 모드 확인\n워치 설정 → 건강 및 안전 → 심박수 → '항상' 또는 '자동'으로 설정")
+                    HelpItem("2", "삼성 헬스 → Health Connect 동기화 확인\n삼성 헬스 앱 → 설정 → Health Connect → 연결 앱 허용 여부 확인")
+                    HelpItem("3", "Health Connect 앱 권한 확인\nHealth Connect 앱 → 앱 권한 → TimerKit → 심박수 읽기 허용")
+                    HelpItem("4", "워치와 폰 동기화\nGalaxy Wearable 앱에서 워치 연결 상태 확인 후 동기화")
+                    Text(
+                        "※ 삼성 헬스 동기화 딜레이로 인해 데이터가 최대 5분 늦게 반영될 수 있습니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHelp = false }) { Text("확인") }
+            }
+        )
+    }
+
     Spacer(modifier = Modifier.height(8.dp))
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -517,7 +557,7 @@ private fun HeartRateRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -538,17 +578,55 @@ private fun HeartRateRow(
                     )
                 } else {
                     Text(
-                        text = if (isRunning) "데이터 수신 대기 중..." else "워치 연결 필요",
+                        text = when {
+                            !isPermissionGranted -> "워치 연결 필요"
+                            isRunning -> "데이터 수신 대기 중..."
+                            else -> "러닝 시작 시 측정됩니다"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            if (bpm == null && !isRunning) {
-                Spacer(modifier = Modifier.width(12.dp))
+            if (!isPermissionGranted) {
+                Spacer(modifier = Modifier.width(8.dp))
                 OutlinedButton(onClick = onRequestPermission) { Text("허용") }
             }
+            IconButton(onClick = { showHelp = true }) {
+                Icon(
+                    Icons.Filled.HelpOutline,
+                    contentDescription = "심박수 연동 도움말",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun HelpItem(number: String, text: String) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+        ) {
+            Text(
+                text = number,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(2.dp)
+            )
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
