@@ -1,6 +1,6 @@
 # TimerKit 개인정보처리방침
 
-**최종 수정일: 2026년 3월 29일**
+**최종 수정일: 2026년 4월 27일**
 
 본 개인정보처리방침은 TimerKit 앱(이하 "앱")이 수집하는 정보와 그 사용 방법을 설명합니다.
 
@@ -14,6 +14,16 @@
 - **수집 시점**: 사용자가 러닝 타이머를 시작하고 위치 권한을 허용한 경우에만 수집
 - **저장 방식**: 기기 내부에만 저장되며, 외부 서버로 전송되지 않습니다
 - **보관 기간**: 앱 실행 중에만 유지되며, 앱 종료 시 삭제됩니다
+
+### 건강 데이터 (심박수)
+앱은 Android Health Connect를 통해 심박수(Heart Rate) 데이터를 읽습니다.
+- **수집 목적**: 러닝 중 실시간 심박수 표시, 러닝 완료 시 평균/최대 심박수 기록
+- **수집 시점**: 사용자가 러닝 타이머를 시작하고 Health Connect 심박수 권한을 허용한 경우에만 수집
+- **데이터 출처**: Wear OS 워치(Galaxy Watch 등) → Samsung Health / Health Connect → TimerKit
+- **저장 방식**: 기기 내부(로컬 데이터베이스)에만 저장되며, 외부 서버로 전송되지 않습니다
+- **제3자 공유**: 심박수 데이터는 어떠한 제3자에게도 공유되지 않습니다
+- **데이터 삭제**: 앱 내 러닝 히스토리 삭제 기능을 통해 언제든지 기록을 삭제할 수 있습니다
+- **권한 철회**: 설정 → 앱 → TimerKit → 권한 또는 Health Connect 앱에서 언제든지 철회 가능
 
 ### 광고 식별자 (Advertising ID)
 앱은 Google AdMob을 통해 광고를 제공하며, 이 과정에서 광고 식별자가 사용될 수 있습니다.
@@ -42,6 +52,7 @@
 | Google AdMob | 광고 제공 | [링크](https://policies.google.com/privacy) |
 | Google Firebase Crashlytics | 앱 오류 수집 및 안정성 개선 | [링크](https://firebase.google.com/support/privacy) |
 | Google Maps | 러닝 경로 지도 표시 | [링크](https://policies.google.com/privacy) |
+| Android Health Connect | 워치 심박수 데이터 읽기 | [링크](https://developer.android.com/health-and-fitness/guides/health-connect/plan/privacy-policy) |
 
 ---
 
@@ -60,12 +71,23 @@
 
 ---
 
-## 6. 위치 권한 철회
+## 6. 권한 철회 및 데이터 삭제
 
+### 위치 권한
 언제든지 기기 설정에서 위치 권한을 철회할 수 있습니다.
 - **Android**: 설정 → 앱 → TimerKit → 권한 → 위치
 
 위치 권한 철회 시 러닝 거리/경로 측정 기능이 제한됩니다.
+
+### Health Connect 권한
+심박수 데이터 접근 권한을 언제든지 철회할 수 있습니다.
+- **방법 1**: 설정 → 앱 → TimerKit → 권한 → 건강
+- **방법 2**: Health Connect 앱 → 앱 권한 → TimerKit → 심박수 비활성화
+
+권한 철회 시 러닝 중 심박수 표시 기능이 제한됩니다.
+
+### 러닝 기록 삭제
+앱 내 러닝 히스토리 화면에서 개별 기록을 삭제하거나, 앱 삭제 시 모든 로컬 데이터가 함께 삭제됩니다.
 
 ---
 

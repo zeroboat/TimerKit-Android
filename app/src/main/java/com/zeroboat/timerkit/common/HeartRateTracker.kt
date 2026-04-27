@@ -33,7 +33,7 @@ class HeartRateTracker(private val context: Context) {
         if (!isAvailable()) return null
         return try {
             val end = Instant.now()
-            val start = end.minusSeconds(60)
+            val start = end.minusSeconds(300) // 삼성 헬스 → Health Connect 동기화 딜레이 고려 (최대 5분)
             val response = client.readRecords(
                 ReadRecordsRequest(
                     recordType = HeartRateRecord::class,
