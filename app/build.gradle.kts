@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         applicationId = "com.zeroboat.timerkit"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 4
         versionName = "1.4.0"
@@ -62,6 +62,11 @@ android {
     lint {
         baseline = file("lint-baseline.xml")
     }
+}
+
+ksp {
+    // 스키마 스냅샷이 있어야 다음 버전에서 마이그레이션을 작성/검증할 수 있다.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
