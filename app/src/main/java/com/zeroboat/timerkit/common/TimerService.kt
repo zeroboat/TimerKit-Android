@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -19,6 +20,7 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -48,6 +50,7 @@ class TimerService : Service() {
 
     private val fusedClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
     private var lastLocation: Location? = null
+    private var lastText: String = "타이머 실행 중"
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -73,9 +76,16 @@ class TimerService : Service() {
 
     @SuppressLint("MissingPermission")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val text = intent?.getStringExtra(EXTRA_TEXT) ?: "타이머 실행 중"
+        val text = intent?.getStringExtra(EXTRA_TEXT) ?: lastText
+        lastText = text
         when (intent?.action) {
-            ACTION_START -> startForeground(NOTIFICATION_ID, buildNotification(text))
+            // 위치를 쓰지 않는 일반 타이머는 specialUse 로 시작한다.
+            // location 타입은 ACCESS_FINE/COARSE_LOCATION 이 허용되어 있어야만
+            // startForeground 가 성공하므로(API 34+), 러닝이 아닌 타이머에 쓰면
+            // 권한 없는 사용자에게서 SecurityException 이 발생한다.
+            ACTION_START -> startForegroundWithType(
+                text, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
             ACTION_UPDATE -> {
                 updateNotification(text)
                 updateOverlay(text)
@@ -86,6 +96,9 @@ class TimerService : Service() {
                 stopSelf()
             }
             ACTION_START_LOCATION -> {
+                // 백그라운드에서 위치를 계속 받으려면 FGS 타입이 location 이어야 한다.
+                // 이 액션은 호출부에서 위치 권한을 확인한 뒤에만 전달된다.
+                startForegroundWithType(text, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
                 val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3_000L)
                     .setMinUpdateIntervalMillis(2_000L)
                     .build()
@@ -96,6 +109,10 @@ class TimerService : Service() {
             ACTION_HIDE_OVERLAY -> hideOverlay()
         }
         return START_STICKY
+    }
+
+    private fun startForegroundWithType(text: String, type: Int) {
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(text), type)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
