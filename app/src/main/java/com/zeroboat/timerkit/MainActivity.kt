@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -44,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.ads.AdRequest
@@ -236,8 +238,13 @@ private fun ShortcutCard(shortcut: TimerShortcut, onClick: () -> Unit) {
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                // 설명 문구 길이에 따라 카드 높이가 들쭉날쭉해지지 않도록 최소 높이를 준다.
+                .heightIn(min = 132.dp)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
         ) {
             Icon(
                 imageVector = shortcut.icon,
@@ -249,12 +256,14 @@ private fun ShortcutCard(shortcut: TimerShortcut, onClick: () -> Unit) {
                 text = shortcut.title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                textAlign = TextAlign.Center
             )
             Text(
                 text = shortcut.description,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f)
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
+                textAlign = TextAlign.Center
             )
         }
     }
